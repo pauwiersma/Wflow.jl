@@ -314,15 +314,17 @@ end
 
 
 """
-    snowpack_hbv(snow, snowwater, precipitation, temperature, tti, tt, ttm, cfmax, whc)
+    snowpack_hbv(snow, snowwater, swemax, precipitation, temperature, tti, tt, ttm, cfmax, whc,sfcf,rfcf)
 
 HBV type snowpack modeling using a temperature degree factor.
 All correction factors (RFCF and SFCF) are set to 1.
 The refreezing efficiency factor is set to 0.05.
+Manually Added swemax, cv, sfcf & rfcf by pwiersma
 
 # Arguments
 - `snow` (snow storage)
 - `snowwater` (liquid water content in the snow pack)
+-  `swemax` (maximum snow water equivalent)
 - `precipitation` (throughfall + stemflow)
 - `temperature`
 - `tti` (snowfall threshold interval length)
@@ -332,27 +334,31 @@ The refreezing efficiency factor is set to 0.05.
 - `whc` (Water holding capacity of snow)
 - `rfcf` correction factor for rainfall
 - `sfcf` correction factor for snowfall
+- `cv` (Coefficient of variation of fractional snow cover)
 - `cfr` refreeing efficiency constant in refreezing of freewater in snow
 
 # Output
 - `snow`
 - `snowwater`
 - `snowmelt`
+- `swemax`
 - `rainfall` (precipitation that occurs as rainfall)
 - `snowfall` (precipitation that occurs as snowfall)
 """
 function snowpack_hbv(
     snow,
     snowwater,
+    swemax,
     precipitation,
     temperature,
     tti,
     tt,
     ttm,
     cfmax,
-    whc;
-    rfcf = 1.0,
-    sfcf = 1.0,
+    whc,
+    sfcf,
+    rfcf,
+    cv;
     cfr = 0.05,
 )
 
@@ -376,9 +382,19 @@ function snowpack_hbv(
     potrefreezing = temperature < ttm ? cfmax * cfr * (ttm - temperature) : 0.0
     # actual refreezing
     refreezing = temperature < ttm ? min(potrefreezing, snowwater) : 0.0
+    
+    #Calculate fsca melt reduction factor
+    swemax = ((snow + snowwater) .!= 0) .* max.(swemax, snow + snowwater)
+
+    #Essery and Pomeroy 2004
+    if (swemax != 0) && (cv != 0)
+        SCF_reduction = max(0.01, tanh(1.26 * ((snow+snowwater) /(cv * swemax))))
+    else
+        SCF_reduction = 1  
+    end
 
     # no landuse correction here
-    snowmelt = min(potsnowmelt, snow)  # actual snow melt
+    snowmelt = min(potsnowmelt*SCF_reduction, snow)   # actual snow melt
     snow = snow + snowfall + refreezing - snowmelt  # dry snow content
     snowwater = snowwater - refreezing  # free water content in snow
     maxsnowwater = snow * whc  # max water in the snow
@@ -386,7 +402,8 @@ function snowpack_hbv(
     rainfall = max(snowwater - maxsnowwater, 0.0)  # rain + surpluss snowwater
     snowwater = snowwater - rainfall
 
-    return snow, snowwater, snowmelt, rainfall, snowfall
+
+    return snow, snowwater, swemax, snowmelt, rainfall, snowfall
 end
 
 """

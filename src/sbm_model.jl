@@ -41,6 +41,7 @@ function initialize_sbm_model(config::Config)
     glacier = get(config.model, "glacier", false)::Bool
     masswasting = get(config.model, "masswasting", false)::Bool
     @info "General model settings" reservoirs lakes snow masswasting glacier
+    mwf = get(config.input.lateral.snow, "mwf",1.0)::Float64
 
     nc = NCDataset(static_path)
 
@@ -72,7 +73,8 @@ function initialize_sbm_model(config::Config)
 
     inds_riv, rev_inds_riv = active_indices(river_2d, 0)
     nriv = length(inds_riv)
-
+    #define swemax 
+    swemax = zeros(Float64, modelsize_2d)
     sbm = initialize_sbm(nc, config, riverfrac, inds)
 
     # reservoirs
@@ -480,6 +482,8 @@ function update_until_recharge(model::Model{N,L,V,R,W,T}) where {N,L,V,R,W,T<:Sb
     # snow transport is possible
     update_until_snow(vertical, config)
 
+    mwf = get(config.input.lateral.snow, "mwf",1.0)::Float64
+
     # lateral snow transport
     if get(config.model, "masswasting", false)::Bool
         lateral_snow_transport!(
@@ -487,6 +491,7 @@ function update_until_recharge(model::Model{N,L,V,R,W,T}) where {N,L,V,R,W,T<:Sb
             vertical.snowwater,
             network.land.slope,
             network.land,
+            mwf
         )
     end
 

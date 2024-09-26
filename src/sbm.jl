@@ -195,6 +195,12 @@
     tti::Vector{T} | "ᵒC"
     # Threshold temperature for snowmelt [ᵒC]
     ttm::Vector{T} | "ᵒC"
+    # Snowfall correction factor[-]
+    sfcf::Vector{T} | "-"   
+    # Rainfall correction factor[-]
+    rfcf::Vector{T} | "-" 
+    # Coefficient of variation of fractional snow covered area [-]
+    cv::Vector{T} | "-" 
     # Water holding capacity as fraction of current snow pack [-]
     whc::Vector{T} | "-"
     # Soil temperature smooth factor [-]
@@ -205,6 +211,8 @@
     snow::Vector{T} | "mm"
     # Liquid water content in the snow pack [mm]
     snowwater::Vector{T} | "mm"
+    # Maximum SWE [mm]
+    swemax::Vector{T} | "mm"
     # Snow melt + precipitation as rainfall [mm]
     rainfallplusmelt::Vector{T} | "mm"
     # Threshold temperature for snowfall above glacier [ᵒC]
@@ -323,6 +331,9 @@ function initialize_sbm(nc, config, riverfrac, inds)
     tt = ncread(nc, config, "vertical.tt"; sel = inds, defaults = 0.0, type = Float)
     tti = ncread(nc, config, "vertical.tti"; sel = inds, defaults = 1.0, type = Float)
     ttm = ncread(nc, config, "vertical.ttm"; sel = inds, defaults = 0.0, type = Float)
+    sfcf = ncread(nc, config, "vertical.sfcf"; sel = inds, defaults = 1.0, type = Float)
+    rfcf = ncread(nc, config, "vertical.rfcf"; sel = inds, defaults = 1.0, type = Float)
+    cv = ncread(nc,config,"vertical.cv"; sel = inds, defaults = 0.5, type = Float)
     whc = ncread(nc, config, "vertical.whc"; sel = inds, defaults = 0.1, type = Float)
     w_soil =
         ncread(
@@ -743,10 +754,14 @@ function initialize_sbm(nc, config, riverfrac, inds)
         tti = tti,
         ttm = ttm,
         whc = whc,
+        sfcf = sfcf,
+        rfcf = rfcf,
+        cv = cv,
         w_soil = w_soil,
         cf_soil = cf_soil,
         snow = zeros(Float, n),
         snowwater = zeros(Float, n),
+        swemax = zeros(Float,n),
         rainfallplusmelt = fill(mv, n),
         tsoil = fill(Float(10.0), n),
         # glacier parameters
@@ -826,9 +841,10 @@ function update_until_snow(sbm::SBM, config)
 
         if modelsnow
             tsoil = sbm.tsoil[i] + sbm.w_soil[i] * (sbm.temperature[i] - sbm.tsoil[i])
-            snow, snowwater, snowmelt, rainfallplusmelt, snowfall = snowpack_hbv(
+            snow, snowwater, swemax, snowmelt, rainfallplusmelt, snowfall = snowpack_hbv(
                 sbm.snow[i],
                 sbm.snowwater[i],
+                sbm.swemax[i],
                 throughfall + stemflow,
                 sbm.temperature[i],
                 sbm.tti[i],
@@ -836,6 +852,9 @@ function update_until_snow(sbm::SBM, config)
                 sbm.ttm[i],
                 sbm.cfmax[i],
                 sbm.whc[i],
+                sbm.sfcf[i],
+                sbm.rfcf[i], 
+                sbm.cv[i],
             )
         end
 
@@ -854,6 +873,7 @@ function update_until_snow(sbm::SBM, config)
         if modelsnow
             sbm.snow[i] = snow
             sbm.snowwater[i] = snowwater
+            sbm.swemax[i] = swemax
             sbm.tsoil[i] = tsoil
             sbm.rainfallplusmelt[i] = rainfallplusmelt
         end
