@@ -346,8 +346,11 @@ end
 
 Lateral snow transport. Transports snow downhill. Mutates `snow` and `snowwater`.
 """
-function lateral_snow_transport!(snow, snowwater, slope, network)
-    snowflux_frac = min.(0.5, slope ./ 5.67) .* min.(1.0, snow ./ 10000.0)
+function lateral_snow_transport!(snow, snowwater, slope, network, mwf )
+    wetness_ratio = snowwater/snow
+    #Mask for redistribution of snow using snow, wetness_ratio and slope thresholds
+    redistribution_bool = (snow .> 500.0) .& (wetness_ratio .< 0.001) .& (slope .> 0.3)
+    snowflux_frac = min.(0.5, slope ./ 5.67) .* min.(1.0, snow ./ 10000.0) .* redistribution_bool .* mwf
     maxflux = snowflux_frac .* snow
     snow = accucapacitystate!(snow, network, maxflux)
     snowwater = accucapacitystate!(snowwater, network, snowwater .* snowflux_frac)
