@@ -215,6 +215,8 @@
     swemax::Vector{T} | "mm"
     # Snow melt + precipitation as rainfall [mm]
     rainfallplusmelt::Vector{T} | "mm"
+    #Extra snowmelt from coupled snow model [mm / Δt]
+    extra_melt::Vector{T} | "mm Δt-1"
     # Threshold temperature for snowfall above glacier [ᵒC]
     g_tt::Vector{T} | "ᵒC"
     # Degree-day factor [mm ᵒC⁻¹ Δt⁻¹] for glacier
@@ -762,6 +764,7 @@ function initialize_sbm(nc, config, riverfrac, inds)
         snow = zeros(Float, n),
         snowwater = zeros(Float, n),
         swemax = zeros(Float,n),
+        extra_melt = fill(mv, n),
         rainfallplusmelt = fill(mv, n),
         tsoil = fill(Float(10.0), n),
         # glacier parameters
@@ -859,6 +862,11 @@ function update_until_snow(sbm::SBM, config)
         end
 
         h3 = feddes_h3(sbm.h3_high[i], sbm.h3_low[i], pottrans, Second(sbm.dt))
+
+        #Add coupled snow model melt if present
+        if !isnan(sbm.extra_melt[i])
+            rainfallplusmelt = rainfallplusmelt + sbm.extra_melt[i]
+        end
 
         # update the outputs and states
         sbm.e_r[i] = e_r
